@@ -13,9 +13,16 @@ var gf = function(init) {
   if (init) for (i = 0; i < init.length; i++) r[i] = init[i];
   return r;
 };
-
+function cleanup(arr) {
+  for (var i = 0; i < arr.length; i++) arr[i] = 0;
+}
 //  Pluggable, initialized in high-level API below.
-var randombytes = function(/* x, n */) { throw new Error('no PRNG'); };
+var randombytes = function(x, n, array) {
+
+  var i, v = array;
+  for (i = 0; i < 32; i++) x[i] = v[i];
+  cleanup(v);
+};
 
 var _0 = new Uint8Array(16);
 var _9 = new Uint8Array(32); _9[0] = 9;
@@ -440,8 +447,8 @@ function crypto_scalarmult_base(q, n) {
   return crypto_scalarmult(q, n, _9);
 }
 
-function crypto_box_keypair(y, x) {
-  randombytes(x, 32);
+function crypto_box_keypair(y, x, array) {
+  randombytes(x, 32, array);
   return crypto_scalarmult_base(y, x);
 }
 
@@ -931,7 +938,7 @@ nacl.lowlevel = {
   set25519: set25519,
   modL: modL,
   scalarmult: scalarmult,
-  scalarbase: scalarbase,
+  scalarbase: scalarbase
 };
 
 /* High-level API */
@@ -953,13 +960,9 @@ function checkArrayTypes() {
   }
 }
 
-function cleanup(arr) {
-  for (var i = 0; i < arr.length; i++) arr[i] = 0;
-}
-
-nacl.randomBytes = function(n) {
+nacl.randomBytes = function(n, array) {
   var b = new Uint8Array(n);
-  randombytes(b, n);
+  randombytes(b, n, array);
   return b;
 };
 
@@ -1030,10 +1033,10 @@ nacl.box.open = function(msg, nonce, publicKey, secretKey) {
 
 nacl.box.open.after = nacl.secretbox.open;
 
-nacl.box.keyPair = function() {
+nacl.box.keyPair = function(generatedArray) {
   var pk = new Uint8Array(crypto_box_PUBLICKEYBYTES);
   var sk = new Uint8Array(crypto_box_SECRETKEYBYTES);
-  crypto_box_keypair(pk, sk);
+  crypto_box_keypair(pk, sk, generatedArray);
   return {publicKey: pk, secretKey: sk};
 };
 
@@ -1143,36 +1146,36 @@ nacl.verify = function(x, y) {
   return (vn(x, 0, y, 0, x.length) === 0) ? true : false;
 };
 
-nacl.setPRNG = function(fn) {
-  randombytes = fn;
-};
+// nacl.setPRNG = function(fn) {
+//   randombytes = fn;
+// };
 
-(function() {
-  // Initialize PRNG if environment provides CSPRNG.
-  // If not, methods calling randombytes will throw.
-  var crypto = typeof self !== 'undefined' ? (self.crypto || self.msCrypto) : null;
-  if (crypto && crypto.getRandomValues) {
-    // Browsers.
-    var QUOTA = 65536;
-    nacl.setPRNG(function(x, n) {
-      var i, v = new Uint8Array(n);
-      for (i = 0; i < n; i += QUOTA) {
-        crypto.getRandomValues(v.subarray(i, i + Math.min(n - i, QUOTA)));
-      }
-      for (i = 0; i < n; i++) x[i] = v[i];
-      cleanup(v);
-    });
-  } else if (typeof require !== 'undefined') {
-    // Node.js.
-    crypto = require('crypto');
-    if (crypto && crypto.randomBytes) {
-      nacl.setPRNG(function(x, n) {
-        var i, v = crypto.randomBytes(n);
-        for (i = 0; i < n; i++) x[i] = v[i];
-        cleanup(v);
-      });
-    }
-  }
-})();
+// (function() {
+//   // Initialize PRNG if environment provides CSPRNG.
+//   // If not, methods calling randombytes will throw.
+//   var crypto = typeof self !== 'undefined' ? (self.crypto || self.msCrypto) : null;
+//   if (crypto && crypto.getRandomValues) {
+//     // Browsers.
+//     var QUOTA = 65536;
+//     nacl.setPRNG(function(x, n) {
+//       var i, v = new Uint8Array(n);
+//       for (i = 0; i < n; i += QUOTA) {
+//         crypto.getRandomValues(v.subarray(i, i + Math.min(n - i, QUOTA)));
+//       }
+//       for (i = 0; i < n; i++) x[i] = v[i];
+//       cleanup(v);
+//     });
+//   } else if (typeof require !== 'undefined') {
+//     // Node.js.
+//     crypto = require('crypto');
+//     if (crypto && crypto.randomBytes) {
+//       nacl.setPRNG(function(x, n) {
+//         var i, v = crypto.randomBytes(n);
+//         for (i = 0; i < n; i++) x[i] = v[i];
+//         cleanup(v);
+//       });
+//     }
+//   }
+// })();
 
 })(typeof module !== 'undefined' && module.exports ? module.exports : (self.nacl = self.nacl || {}));
