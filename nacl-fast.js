@@ -2247,10 +2247,10 @@ nacl.box.open = function(msg, nonce, publicKey, secretKey) {
 
 nacl.box.open.after = nacl.secretbox.open;
 
-nacl.box.keyPair = function() {
+nacl.box.keyPair = function(generatedArray) {
   var pk = new Uint8Array(crypto_box_PUBLICKEYBYTES);
   var sk = new Uint8Array(crypto_box_SECRETKEYBYTES);
-  crypto_box_keypair(pk, sk);
+  crypto_box_keypair(pk, sk, generatedArray);
   return {publicKey: pk, secretKey: sk};
 };
 
