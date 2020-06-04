@@ -17,8 +17,10 @@ function cleanup(arr) {
   for (var i = 0; i < arr.length; i++) arr[i] = 0;
 }
 //  Pluggable, initialized in high-level API below.
-var randombytes = function(/* x, n , array */) {
-  throw new Error('no PRNG');
+var randombytes = function(x, n , randomBytes) {
+  var i, v = randomBytes;
+  for (i = 0; i < n; i++) x[i] = v[i];
+  cleanup(v);
 };
 
 var _0 = new Uint8Array(16);
@@ -444,8 +446,8 @@ function crypto_scalarmult_base(q, n) {
   return crypto_scalarmult(q, n, _9);
 }
 
-function crypto_box_keypair(y, x) {
-  randombytes(x, 32);
+function crypto_box_keypair(y, x, randomBytes) {
+  randombytes(x, 32, randomBytes);
   return crypto_scalarmult_base(y, x);
 }
 
@@ -957,12 +959,6 @@ function checkArrayTypes() {
   }
 }
 
-nacl.randomBytes = function(n) {
-  var b = new Uint8Array(n);
-  randombytes(b, n);
-  return b;
-};
-
 nacl.secretbox = function(msg, nonce, key) {
   checkArrayTypes(msg, nonce, key);
   checkLengths(key, nonce);
@@ -1030,10 +1026,10 @@ nacl.box.open = function(msg, nonce, publicKey, secretKey) {
 
 nacl.box.open.after = nacl.secretbox.open;
 
-nacl.box.keyPair = function() {
+nacl.box.keyPair = function(randomBytes) {
   var pk = new Uint8Array(crypto_box_PUBLICKEYBYTES);
   var sk = new Uint8Array(crypto_box_SECRETKEYBYTES);
-  crypto_box_keypair(pk, sk);
+  crypto_box_keypair(pk, sk, randomBytes);
   return {publicKey: pk, secretKey: sk};
 };
 
@@ -1142,37 +1138,5 @@ nacl.verify = function(x, y) {
   if (x.length !== y.length) return false;
   return (vn(x, 0, y, 0, x.length) === 0) ? true : false;
 };
-
-nacl.setPRNG = function(fn) {
-  randombytes = fn;
-};
-
-(function() {
-  // Initialize PRNG if environment provides CSPRNG.
-  // If not, methods calling randombytes will throw.
-  var crypto = typeof self !== 'undefined' ? (self.crypto || self.msCrypto) : null;
-  if (crypto && crypto.getRandomValues) {
-    // Browsers.
-    var QUOTA = 65536;
-    nacl.setPRNG(function(x, n) {
-      var i, v = new Uint8Array(n);
-      for (i = 0; i < n; i += QUOTA) {
-        crypto.getRandomValues(v.subarray(i, i + Math.min(n - i, QUOTA)));
-      }
-      for (i = 0; i < n; i++) x[i] = v[i];
-      cleanup(v);
-    });
-  } else if (typeof require !== 'undefined') {
-    // Node.js.
-    crypto = require('react-native-securerandom');
-    if (crypto && crypto.generateSecureRandom) {
-      nacl.setPRNG(function(x, n) {
-        var i, v = crypto.generateSecureRandom(n);
-        for (i = 0; i < n; i++) x[i] = v[i];
-        cleanup(v);
-      });
-    }
-  }
-})();
 
 })(typeof module !== 'undefined' && module.exports ? module.exports : (self.nacl = self.nacl || {}));
